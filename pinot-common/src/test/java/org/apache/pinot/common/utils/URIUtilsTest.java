@@ -53,6 +53,13 @@ public class URIUtilsTest {
   }
 
   @Test
+  public void testGetLastPart() {
+    assertEquals(URIUtils.getLastPart("http://foo/bar"), "bar");
+    assertEquals(URIUtils.getLastPart("/foo/bar"), "bar");
+    assertEquals(URIUtils.getLastPart("file:/foo/bar"), "bar");
+  }
+
+  @Test
   public void testConstructDownloadUrl() {
     assertEquals(URIUtils.constructDownloadUrl("http://foo/bar", "table", "segment"),
         "http://foo/bar/segments/table/segment");
