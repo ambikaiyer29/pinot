@@ -49,6 +49,8 @@ public enum AggregationFunctionType {
   FASTHLL("fastHLL"),
   DISTINCTCOUNTTHETASKETCH("distinctCountThetaSketch"),
   DISTINCTCOUNTRAWTHETASKETCH("distinctCountRawThetaSketch"),
+  DISTINCTSUM("distinctSum"),
+  DISTINCTAVG("distinctAvg"),
   PERCENTILE("percentile"),
   PERCENTILEEST("percentileEst"),
   PERCENTILERAWEST("percentileRawEst"),
@@ -65,6 +67,7 @@ public enum AggregationFunctionType {
   STDDEVSAMP("stdDevSamp"),
   SKEWNESS("skewness"),
   KURTOSIS("kurtosis"),
+  FOURTHMOMENT("fourthmoment"),
 
   // Geo aggregation functions
   STUNION("STUnion"),
@@ -80,6 +83,8 @@ public enum AggregationFunctionType {
   DISTINCTCOUNTBITMAPMV("distinctCountBitmapMV"),
   DISTINCTCOUNTHLLMV("distinctCountHLLMV"),
   DISTINCTCOUNTRAWHLLMV("distinctCountRawHLLMV"),
+  DISTINCTSUMMV("distinctSumMV"),
+  DISTINCTAVGMV("distinctAvgMV"),
   PERCENTILEMV("percentileMV"),
   PERCENTILEESTMV("percentileEstMV"),
   PERCENTILERAWESTMV("percentileRawEstMV"),

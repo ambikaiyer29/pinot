@@ -19,6 +19,7 @@
 package org.apache.pinot.query.runtime.operator;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
@@ -27,17 +28,19 @@ import javax.annotation.Nullable;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.pinot.common.datablock.DataBlock;
 import org.apache.pinot.common.utils.DataSchema;
-import org.apache.pinot.core.common.Operator;
-import org.apache.pinot.core.operator.BaseOperator;
 import org.apache.pinot.core.query.selection.SelectionOperatorUtils;
 import org.apache.pinot.query.planner.logical.RexExpression;
 import org.apache.pinot.query.runtime.blocks.TransferableBlock;
 import org.apache.pinot.query.runtime.blocks.TransferableBlockUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
-public class SortOperator extends BaseOperator<TransferableBlock> {
+public class SortOperator extends MultiStageOperator {
   private static final String EXPLAIN_NAME = "SORT";
-  private final Operator<TransferableBlock> _upstreamOperator;
+  private static final Logger LOGGER = LoggerFactory.getLogger(SortOperator.class);
+
+  private final MultiStageOperator _upstreamOperator;
   private final int _fetch;
   private final int _offset;
   private final DataSchema _dataSchema;
@@ -48,33 +51,36 @@ public class SortOperator extends BaseOperator<TransferableBlock> {
   private boolean _isSortedBlockConstructed;
   private TransferableBlock _upstreamErrorBlock;
 
-  public SortOperator(Operator<TransferableBlock> upstreamOperator, List<RexExpression> collationKeys,
-      List<RelFieldCollation.Direction> collationDirections, int fetch, int offset, DataSchema dataSchema) {
+  public SortOperator(MultiStageOperator upstreamOperator, List<RexExpression> collationKeys,
+      List<RelFieldCollation.Direction> collationDirections, int fetch, int offset, DataSchema dataSchema,
+      long requestId, int stageId) {
     this(upstreamOperator, collationKeys, collationDirections, fetch, offset, dataSchema,
-        SelectionOperatorUtils.MAX_ROW_HOLDER_INITIAL_CAPACITY);
+        SelectionOperatorUtils.MAX_ROW_HOLDER_INITIAL_CAPACITY, requestId, stageId);
   }
 
   @VisibleForTesting
-  SortOperator(Operator<TransferableBlock> upstreamOperator, List<RexExpression> collationKeys,
+  SortOperator(MultiStageOperator upstreamOperator, List<RexExpression> collationKeys,
       List<RelFieldCollation.Direction> collationDirections, int fetch, int offset, DataSchema dataSchema,
-      int maxHolderCapacity) {
+      int defaultHolderCapacity, long requestId, int stageId) {
+    super(requestId, stageId);
     _upstreamOperator = upstreamOperator;
     _fetch = fetch;
-    _offset = offset;
+    _offset = Math.max(offset, 0);
     _dataSchema = dataSchema;
     _upstreamErrorBlock = null;
     _isSortedBlockConstructed = false;
-    _numRowsToKeep = _fetch > 0
-        ? Math.min(maxHolderCapacity, _fetch + (Math.max(_offset, 0)))
-        : maxHolderCapacity;
+    _numRowsToKeep = _fetch > 0 ? _fetch + _offset : defaultHolderCapacity;
     _rows = new PriorityQueue<>(_numRowsToKeep,
         new SortComparator(collationKeys, collationDirections, dataSchema, false));
   }
 
   @Override
-  public List<Operator> getChildOperators() {
-    // WorkerExecutor doesn't use getChildOperators, returns null here.
-    return null;
+  public List<MultiStageOperator> getChildOperators() {
+    return ImmutableList.of(_upstreamOperator);
+  }
+
+  @Override
+  public void cancel(Throwable e) {
   }
 
   @Nullable
@@ -134,7 +140,6 @@ public class SortOperator extends BaseOperator<TransferableBlock> {
         for (Object[] row : container) {
           SelectionOperatorUtils.addToPriorityQueue(row, _rows, _numRowsToKeep);
         }
-
         block = _upstreamOperator.nextBlock();
       }
     }

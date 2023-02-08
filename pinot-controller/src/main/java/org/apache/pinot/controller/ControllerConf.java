@@ -32,6 +32,7 @@ import org.apache.pinot.common.protocols.SegmentCompletionProtocol;
 import org.apache.pinot.spi.env.PinotConfiguration;
 import org.apache.pinot.spi.filesystem.LocalPinotFS;
 import org.apache.pinot.spi.utils.CommonConstants;
+import org.apache.pinot.spi.utils.RebalanceConfigConstants;
 import org.apache.pinot.spi.utils.TimeUtils;
 
 import static org.apache.pinot.spi.utils.CommonConstants.Controller.CONFIG_OF_CONTROLLER_METRICS_PREFIX;
@@ -129,16 +130,27 @@ public class ControllerConf extends PinotConfiguration {
     @Deprecated
     public static final String DEPRECATED_MINION_INSTANCES_CLEANUP_TASK_FREQUENCY_IN_SECONDS =
         "controller.minion.instances.cleanup.task.frequencyInSeconds";
+    @Deprecated
     public static final String MINION_INSTANCES_CLEANUP_TASK_FREQUENCY_PERIOD =
         "controller.minion.instances.cleanup.task.frequencyPeriod";
+    @Deprecated
     public static final String MINION_INSTANCES_CLEANUP_TASK_INITIAL_DELAY_SECONDS =
         "controller.minion.instances.cleanup.task.initialDelaySeconds";
     // Deprecated as of 0.8.0
     @Deprecated
     public static final String DEPRECATED_MINION_INSTANCES_CLEANUP_TASK_MIN_OFFLINE_TIME_BEFORE_DELETION_SECONDS =
         "controller.minion.instances.cleanup.task.minOfflineTimeBeforeDeletionSeconds";
+    @Deprecated
     public static final String MINION_INSTANCES_CLEANUP_TASK_MIN_OFFLINE_TIME_BEFORE_DELETION_PERIOD =
         "controller.minion.instances.cleanup.task.minOfflineTimeBeforeDeletionPeriod";
+
+    public static final String STALE_INSTANCES_CLEANUP_TASK_FREQUENCY_PERIOD =
+        "controller.stale.instances.cleanup.task.frequencyPeriod";
+    public static final String STALE_INSTANCES_CLEANUP_TASK_INITIAL_DELAY_SECONDS =
+        "controller.stale.instances.cleanup.task.initialDelaySeconds";
+    public static final String STALE_INSTANCES_CLEANUP_TASK_INSTANCES_RETENTION_PERIOD =
+        "controller.stale.instances.cleanup.task.minOfflineTimeBeforeDeletionPeriod";
+
     // Deprecated as of 0.8.0
     @Deprecated
     public static final String DEPRECATED_TASK_METRICS_EMITTER_FREQUENCY_IN_SECONDS =
@@ -185,6 +197,12 @@ public class ControllerConf extends PinotConfiguration {
         "controller.segmentRelocator.initialDelayInSeconds";
     public static final String SEGMENT_RELOCATOR_ENABLE_LOCAL_TIER_MIGRATION =
         "controller.segmentRelocator.enableLocalTierMigration";
+    public static final String SEGMENT_RELOCATOR_EXTERNAL_VIEW_STABILIZATION_TIMEOUT_IN_MS =
+        "controller.segmentRelocator.externalViewStabilizationTimeoutInMs";
+    public static final String SEGMENT_RELOCATOR_EXTERNAL_VIEW_CHECK_INTERVAL_IN_MS =
+        "controller.segmentRelocator.externalViewCheckIntervalInMs";
+    public static final String SEGMENT_RELOCATOR_REBALANCE_TABLES_SEQUENTIALLY =
+        "controller.segmentRelocator.rebalanceTablesSequentially";
 
     // The flag to indicate if controller periodic job will fix the missing LLC segment deep store copy.
     // Default value is false.
@@ -209,7 +227,9 @@ public class ControllerConf extends PinotConfiguration {
     private static final int DEFAULT_TASK_METRICS_EMITTER_FREQUENCY_IN_SECONDS = 5 * 60; // 5 minutes
     private static final int DEFAULT_STATUS_CONTROLLER_WAIT_FOR_PUSH_TIME_IN_SECONDS = 10 * 60; // 10 minutes
     private static final int DEFAULT_TASK_MANAGER_FREQUENCY_IN_SECONDS = -1; // Disabled
+    @Deprecated
     private static final int DEFAULT_MINION_INSTANCES_CLEANUP_TASK_FREQUENCY_IN_SECONDS = 60 * 60; // 1 Hour.
+    @Deprecated
     private static final int DEFAULT_MINION_INSTANCES_CLEANUP_TASK_MIN_OFFLINE_TIME_BEFORE_DELETION_IN_SECONDS =
         60 * 60; // 1 Hour.
 
@@ -699,6 +719,7 @@ public class ControllerConf extends PinotConfiguration {
         Integer.toString(frequencyInSeconds));
   }
 
+  @Deprecated
   public int getMinionInstancesCleanupTaskFrequencyInSeconds() {
     return Optional.ofNullable(getProperty(ControllerPeriodicTasksConf.MINION_INSTANCES_CLEANUP_TASK_FREQUENCY_PERIOD))
         .map(period -> (int) convertPeriodToSeconds(period)).orElseGet(
@@ -706,21 +727,25 @@ public class ControllerConf extends PinotConfiguration {
                 ControllerPeriodicTasksConf.DEFAULT_MINION_INSTANCES_CLEANUP_TASK_FREQUENCY_IN_SECONDS));
   }
 
+  @Deprecated
   public void setMinionInstancesCleanupTaskFrequencyInSeconds(int frequencyInSeconds) {
     setProperty(ControllerPeriodicTasksConf.DEPRECATED_MINION_INSTANCES_CLEANUP_TASK_FREQUENCY_IN_SECONDS,
         Integer.toString(frequencyInSeconds));
   }
 
+  @Deprecated
   public long getMinionInstancesCleanupTaskInitialDelaySeconds() {
     return getProperty(ControllerPeriodicTasksConf.MINION_INSTANCES_CLEANUP_TASK_INITIAL_DELAY_SECONDS,
         ControllerPeriodicTasksConf.getRandomInitialDelayInSeconds());
   }
 
+  @Deprecated
   public void setMinionInstancesCleanupTaskInitialDelaySeconds(int initialDelaySeconds) {
     setProperty(ControllerPeriodicTasksConf.MINION_INSTANCES_CLEANUP_TASK_INITIAL_DELAY_SECONDS,
         Integer.toString(initialDelaySeconds));
   }
 
+  @Deprecated
   public int getMinionInstancesCleanupTaskMinOfflineTimeBeforeDeletionInSeconds() {
     return Optional.ofNullable(
         getProperty(ControllerPeriodicTasksConf.MINION_INSTANCES_CLEANUP_TASK_MIN_OFFLINE_TIME_BEFORE_DELETION_PERIOD))
@@ -731,10 +756,44 @@ public class ControllerConf extends PinotConfiguration {
                 DEFAULT_MINION_INSTANCES_CLEANUP_TASK_MIN_OFFLINE_TIME_BEFORE_DELETION_IN_SECONDS));
   }
 
+  @Deprecated
   public void setMinionInstancesCleanupTaskMinOfflineTimeBeforeDeletionInSeconds(int maxOfflineTimeRangeInSeconds) {
     setProperty(
         ControllerPeriodicTasksConf.DEPRECATED_MINION_INSTANCES_CLEANUP_TASK_MIN_OFFLINE_TIME_BEFORE_DELETION_SECONDS,
         Integer.toString(maxOfflineTimeRangeInSeconds));
+  }
+
+  public int getStaleInstancesCleanupTaskFrequencyInSeconds() {
+    return Optional.ofNullable(getProperty(ControllerPeriodicTasksConf.STALE_INSTANCES_CLEANUP_TASK_FREQUENCY_PERIOD))
+        .map(period -> (int) convertPeriodToSeconds(period))
+        // Backward compatible for existing users who configured MinionInstancesCleanupTask
+        .orElse(getMinionInstancesCleanupTaskFrequencyInSeconds());
+  }
+
+  public void setStaleInstanceCleanupTaskFrequencyInSeconds(String frequencyPeriod) {
+    setProperty(ControllerPeriodicTasksConf.STALE_INSTANCES_CLEANUP_TASK_FREQUENCY_PERIOD, frequencyPeriod);
+  }
+
+  public long getStaleInstanceCleanupTaskInitialDelaySeconds() {
+    return getProperty(ControllerPeriodicTasksConf.STALE_INSTANCES_CLEANUP_TASK_INITIAL_DELAY_SECONDS,
+        // Backward compatible for existing users who configured MinionInstancesCleanupTask
+        getMinionInstancesCleanupTaskInitialDelaySeconds());
+  }
+
+  public void setStaleInstanceCleanupTaskInitialDelaySeconds(long initialDelaySeconds) {
+    setProperty(ControllerPeriodicTasksConf.STALE_INSTANCES_CLEANUP_TASK_INITIAL_DELAY_SECONDS, initialDelaySeconds);
+  }
+
+  public int getStaleInstancesCleanupTaskInstancesRetentionInSeconds() {
+    return Optional.ofNullable(
+            getProperty(ControllerPeriodicTasksConf.STALE_INSTANCES_CLEANUP_TASK_INSTANCES_RETENTION_PERIOD))
+        .map(period -> (int) convertPeriodToSeconds(period))
+        // Backward compatible for existing users who configured MinionInstancesCleanupTask
+        .orElse(getMinionInstancesCleanupTaskMinOfflineTimeBeforeDeletionInSeconds());
+  }
+
+  public void setStaleInstancesCleanupTaskInstancesRetentionPeriod(String retentionPeriod) {
+    setProperty(ControllerPeriodicTasksConf.STALE_INSTANCES_CLEANUP_TASK_INSTANCES_RETENTION_PERIOD, retentionPeriod);
   }
 
   public int getDefaultTableMinReplicas() {
@@ -858,6 +917,20 @@ public class ControllerConf extends PinotConfiguration {
 
   public boolean enableSegmentRelocatorLocalTierMigration() {
     return getProperty(ControllerPeriodicTasksConf.SEGMENT_RELOCATOR_ENABLE_LOCAL_TIER_MIGRATION, false);
+  }
+
+  public long getSegmentRelocatorExternalViewCheckIntervalInMs() {
+    return getProperty(ControllerPeriodicTasksConf.SEGMENT_RELOCATOR_EXTERNAL_VIEW_CHECK_INTERVAL_IN_MS,
+        RebalanceConfigConstants.DEFAULT_EXTERNAL_VIEW_CHECK_INTERVAL_IN_MS);
+  }
+
+  public long getSegmentRelocatorExternalViewStabilizationTimeoutInMs() {
+    return getProperty(ControllerPeriodicTasksConf.SEGMENT_RELOCATOR_EXTERNAL_VIEW_STABILIZATION_TIMEOUT_IN_MS,
+        RebalanceConfigConstants.DEFAULT_EXTERNAL_VIEW_STABILIZATION_TIMEOUT_IN_MS);
+  }
+
+  public boolean isSegmentRelocatorRebalanceTablesSequentially() {
+    return getProperty(ControllerPeriodicTasksConf.SEGMENT_RELOCATOR_REBALANCE_TABLES_SEQUENTIALLY, false);
   }
 
   public long getPeriodicTaskInitialDelayInSeconds() {

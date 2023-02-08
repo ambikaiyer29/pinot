@@ -59,10 +59,6 @@ public class PinotQueryRuleSets {
           CoreRules.PROJECT_MERGE,
           // remove identity project
           CoreRules.PROJECT_REMOVE,
-          // add an extra exchange for sort
-          PinotSortExchangeNodeInsertRule.INSTANCE,
-          // copy exchanges down
-          PinotSortExchangeCopyRule.SORT_EXCHANGE_COPY,
           // reorder sort and projection
           CoreRules.SORT_PROJECT_TRANSPOSE,
 
@@ -82,6 +78,7 @@ public class PinotQueryRuleSets {
           CoreRules.AGGREGATE_UNION_AGGREGATE,
 
           // reduce aggregate functions like AVG, STDDEV_POP etc.
+          PinotReduceAggregateFunctionsRule.INSTANCE,
           CoreRules.AGGREGATE_REDUCE_FUNCTIONS,
 
           // remove unnecessary sort rule
@@ -94,6 +91,13 @@ public class PinotQueryRuleSets {
 
           // Pinot specific rules
           PinotFilterExpandSearchRule.INSTANCE,
+
+          // Pinot exchange rules
+          // add an extra exchange for sort
+          PinotSortExchangeNodeInsertRule.INSTANCE,
+          // copy exchanges down, this must be done after SortExchangeNodeInsertRule
+          PinotSortExchangeCopyRule.SORT_EXCHANGE_COPY,
+
           PinotJoinExchangeNodeInsertRule.INSTANCE,
           PinotAggregateExchangeNodeInsertRule.INSTANCE
       );

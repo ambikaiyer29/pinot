@@ -19,6 +19,7 @@
 package org.apache.pinot.query.runtime.operator;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,13 +28,13 @@ import java.util.Set;
 import javax.annotation.Nullable;
 import org.apache.calcite.rel.RelDistribution;
 import org.apache.pinot.common.exception.QueryException;
-import org.apache.pinot.core.common.Operator;
 import org.apache.pinot.core.operator.BaseOperator;
-import org.apache.pinot.core.transport.ServerInstance;
+import org.apache.pinot.query.mailbox.JsonMailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxIdentifier;
 import org.apache.pinot.query.mailbox.MailboxService;
 import org.apache.pinot.query.mailbox.ReceivingMailbox;
-import org.apache.pinot.query.mailbox.StringMailboxIdentifier;
+import org.apache.pinot.query.routing.VirtualServer;
+import org.apache.pinot.query.routing.VirtualServerAddress;
 import org.apache.pinot.query.runtime.blocks.TransferableBlock;
 import org.apache.pinot.query.runtime.blocks.TransferableBlockUtils;
 import org.apache.pinot.query.service.QueryConfig;
@@ -50,7 +51,7 @@ import org.slf4j.LoggerFactory;
  *  When exchangeType is Singleton, we find the mapping mailbox for the mailboxService. If not found, use empty list.
  *  When exchangeType is non-Singleton, we pull from each instance in round-robin way to get matched mailbox content.
  */
-public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
+public class MailboxReceiveOperator extends MultiStageOperator {
   private static final Logger LOGGER = LoggerFactory.getLogger(MailboxReceiveOperator.class);
   private static final String EXPLAIN_NAME = "MAILBOX_RECEIVE";
 
@@ -66,16 +67,19 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
   private int _serverIdx;
   private TransferableBlock _upstreamErrorBlock;
 
-  private static MailboxIdentifier toMailboxId(ServerInstance fromInstance, long jobId, long stageId,
-      String receiveHostName, int receivePort) {
-    return new StringMailboxIdentifier(String.format("%s_%s", jobId, stageId), fromInstance.getHostname(),
-        fromInstance.getQueryMailboxPort(), receiveHostName, receivePort);
+  private static MailboxIdentifier toMailboxId(VirtualServer sender, long jobId, long stageId,
+      VirtualServerAddress receiver) {
+    return new JsonMailboxIdentifier(
+        String.format("%s_%s", jobId, stageId),
+        new VirtualServerAddress(sender),
+        receiver);
   }
 
   // TODO: Move deadlineInNanoSeconds to OperatorContext.
   public MailboxReceiveOperator(MailboxService<TransferableBlock> mailboxService,
-      List<ServerInstance> sendingStageInstances, RelDistribution.Type exchangeType, String receiveHostName,
-      int receivePort, long jobId, int stageId, Long timeoutMs) {
+      List<VirtualServer> sendingStageInstances, RelDistribution.Type exchangeType, VirtualServerAddress receiver,
+      long jobId, int stageId, Long timeoutMs) {
+    super(jobId, stageId);
     _mailboxService = mailboxService;
     Preconditions.checkState(SUPPORTED_EXCHANGE_TYPES.contains(exchangeType),
         "Exchange/Distribution type: " + exchangeType + " is not supported!");
@@ -84,8 +88,8 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
 
     _exchangeType = exchangeType;
     if (_exchangeType == RelDistribution.Type.SINGLETON) {
-      ServerInstance singletonInstance = null;
-      for (ServerInstance serverInstance : sendingStageInstances) {
+      VirtualServer singletonInstance = null;
+      for (VirtualServer serverInstance : sendingStageInstances) {
         if (serverInstance.getHostname().equals(_mailboxService.getHostname())
             && serverInstance.getQueryMailboxPort() == _mailboxService.getMailboxPort()) {
           Preconditions.checkState(singletonInstance == null, "multiple instance found for singleton exchange type!");
@@ -99,12 +103,12 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
         _sendingMailbox = Collections.emptyList();
       } else {
         _sendingMailbox =
-            Collections.singletonList(toMailboxId(singletonInstance, jobId, stageId, receiveHostName, receivePort));
+            Collections.singletonList(toMailboxId(singletonInstance, jobId, stageId, receiver));
       }
     } else {
       _sendingMailbox = new ArrayList<>(sendingStageInstances.size());
-      for (ServerInstance instance : sendingStageInstances) {
-        _sendingMailbox.add(toMailboxId(instance, jobId, stageId, receiveHostName, receivePort));
+      for (VirtualServer instance : sendingStageInstances) {
+        _sendingMailbox.add(toMailboxId(instance, jobId, stageId, receiver));
       }
     }
     _upstreamErrorBlock = null;
@@ -116,9 +120,8 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
   }
 
   @Override
-  public List<Operator> getChildOperators() {
-    // WorkerExecutor doesn't use getChildOperators, returns null here.
-    return null;
+  public List<MultiStageOperator> getChildOperators() {
+    return ImmutableList.of();
   }
 
   @Nullable
@@ -132,7 +135,6 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
     if (_upstreamErrorBlock != null) {
       return _upstreamErrorBlock;
     } else if (System.nanoTime() >= _deadlineTimestampNano) {
-      LOGGER.error("Timed out after polling mailboxes: {}", _sendingMailbox);
       return TransferableBlockUtils.getErrorTransferableBlock(QueryException.EXECUTION_TIMEOUT_ERROR);
     }
 
@@ -151,7 +153,6 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
         if (!mailbox.isClosed()) {
           openMailboxCount++;
           TransferableBlock block = mailbox.receive();
-
           // Get null block when pulling times out from mailbox.
           if (block != null) {
             if (block.isErrorBlock()) {
@@ -167,8 +168,8 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
           }
         }
       } catch (Exception e) {
-        // TODO: Handle this exception.
-        LOGGER.error(String.format("Error receiving data from mailbox %s", mailboxId), e);
+        return TransferableBlockUtils.getErrorTransferableBlock(
+            new RuntimeException(String.format("Error polling mailbox=%s", mailboxId), e));
       }
     }
 
@@ -177,8 +178,9 @@ public class MailboxReceiveOperator extends BaseOperator<TransferableBlock> {
     // should be hit first, but is defensive) (2) every mailbox that was opened
     // returned an EOS block. in every other scenario, there are mailboxes that
     // are not yet exhausted and we should wait for more data to be available
-    return openMailboxCount > 0 && openMailboxCount > eosMailboxCount
-        ? TransferableBlockUtils.getNoOpTransferableBlock()
-        : TransferableBlockUtils.getEndOfStreamTransferableBlock();
+    TransferableBlock block =
+        openMailboxCount > 0 && openMailboxCount > eosMailboxCount ? TransferableBlockUtils.getNoOpTransferableBlock()
+            : TransferableBlockUtils.getEndOfStreamTransferableBlock();
+    return block;
   }
 }

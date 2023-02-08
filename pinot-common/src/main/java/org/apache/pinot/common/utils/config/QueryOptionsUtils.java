@@ -109,6 +109,10 @@ public class QueryOptionsUtils {
     return Boolean.parseBoolean(queryOptions.get(QueryOptionKey.SKIP_UPSERT));
   }
 
+  public static boolean isScanStarTreeNodes(Map<String, String> queryOptions) {
+    return Boolean.parseBoolean(queryOptions.get(QueryOptionKey.SCAN_STAR_TREE_NODES));
+  }
+
   public static boolean isSkipStarTree(Map<String, String> queryOptions) {
     return "false".equalsIgnoreCase(queryOptions.get(QueryOptionKey.USE_STAR_TREE));
   }
@@ -161,5 +165,29 @@ public class QueryOptionsUtils {
   @Nullable
   public static String getOrderByAlgorithm(Map<String, String> queryOptions) {
     return queryOptions.get(QueryOptionKey.ORDER_BY_ALGORITHM);
+  }
+
+  @Nullable
+  public static Integer getMultiStageLeafLimit(Map<String, String> queryOptions) {
+    String maxLeafLimitStr = queryOptions.get(QueryOptionKey.MULTI_STAGE_LEAF_LIMIT);
+    return maxLeafLimitStr != null ? Integer.parseInt(maxLeafLimitStr) : null;
+  }
+
+  @Nullable
+  public static Integer getNumGroupsLimit(Map<String, String> queryOptions) {
+    String maxNumGroupLimit = queryOptions.get(QueryOptionKey.NUM_GROUPS_LIMIT);
+    return maxNumGroupLimit != null ? Integer.parseInt(maxNumGroupLimit) : null;
+  }
+
+  @Nullable
+  public static Integer getMaxInitialResultHolderCapacity(Map<String, String> queryOptions) {
+    String maxInitResultCap = queryOptions.get(QueryOptionKey.MAX_INITIAL_RESULT_HOLDER_CAPACITY);
+    return maxInitResultCap != null ? Integer.parseInt(maxInitResultCap) : null;
+  }
+
+  @Nullable
+  public static Integer getGroupTrimThreshold(Map<String, String> queryOptions) {
+    String groupByTrimThreshold = queryOptions.get(QueryOptionKey.GROUP_TRIM_THRESHOLD);
+    return groupByTrimThreshold != null ? Integer.parseInt(groupByTrimThreshold) : null;
   }
 }
