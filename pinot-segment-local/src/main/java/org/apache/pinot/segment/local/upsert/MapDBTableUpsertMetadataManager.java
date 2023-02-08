@@ -18,31 +18,36 @@
  */
 package org.apache.pinot.segment.local.upsert;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.concurrent.ThreadSafe;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
  * Implementation of {@link TableUpsertMetadataManager} that is backed by a {@link ConcurrentHashMap}.
  */
 @ThreadSafe
-public class ConcurrentMapTableUpsertMetadataManager extends BaseTableUpsertMetadataManager {
-  private final Map<Integer, ConcurrentMapPartitionUpsertMetadataManager> _partitionMetadataManagerMap =
+public class MapDBTableUpsertMetadataManager extends BaseTableUpsertMetadataManager {
+
+  private final static Logger LOGGER = LoggerFactory.getLogger(MapDBTableUpsertMetadataManager.class);
+
+  private final Map<Integer, MapDBPartitionUpsertMetadataManager> _partitionMetadataManagerMap =
       new ConcurrentHashMap<>();
 
   @Override
   public PartitionUpsertMetadataManager getOrCreatePartitionManager(int partitionId) {
+    LOGGER.info("Creating partition manager for " + _tableNameWithType + " partition " + partitionId);
     return _partitionMetadataManagerMap.computeIfAbsent(partitionId,
-        k -> new ConcurrentMapPartitionUpsertMetadataManager(_tableNameWithType, k, _primaryKeyColumns,
-            _comparisonColumn, _hashFunction, _partialUpsertHandler, _enableSnapshot, _serverMetrics));
+        k -> new MapDBPartitionUpsertMetadataManager(_tableNameWithType, k, _primaryKeyColumns,
+            _comparisonColumn, _hashFunction, _partialUpsertHandler, _serverMetrics));
   }
 
   @Override
-  public void close()
-      throws IOException {
-    for (ConcurrentMapPartitionUpsertMetadataManager partitionUpsertMetadataManager
+  public void close() {
+    LOGGER.info("Closing partition manager for " + _tableNameWithType);
+    for (MapDBPartitionUpsertMetadataManager partitionUpsertMetadataManager
         : _partitionMetadataManagerMap.values()) {
       partitionUpsertMetadataManager.close();
     }
